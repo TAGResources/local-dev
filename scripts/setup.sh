@@ -5,16 +5,40 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # FIGURE OUT THE SHELL
-if [[ "$SHELL" == '/bin/zsh' ]]; then
+if [[ "$SHELL" == *'/zsh' ]]; then
     shell_config_path="$HOME/.zshrc"
-elif [[ "$SHELL" == '/bin/bash' ]]; then
+    shell_name="zsh"
+elif [[ "$SHELL" == *'/bash' ]]; then # use * wildcards since the specific shell path can differ (for example mine was /usr/local/bin/bash not /bin/bash)
     shell_config_path="$HOME/.bashrc"
+    shell_name="bash"
 else
-    printf "${RED}ERROR: Unidentified shell.\n"
+    printf "${RED}ERROR: Unidentified shell.${NC}\n"
     exit 1
 fi
 
-printf "${GREEN}We have detected you are using $shell_config_path${NC}\n"
+# MAKE SURE SSH KEYS HAVE BEEN SETUP
+prompt="Before continuing, did you setup an ssh key with github? https://help.github.com/en/github/authenticating-to-github/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent (Y to continue, N to cancel): "
+printf "${GREEN}${prompt}${NC}"
+
+if [[ $shell_name == "bash" ]]; then
+  read -n 1 -r
+else
+  read -k -r
+fi
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    printf "\n${RED}ERROR: Please do that first, then re-run this script.${NC}\n"
+    exit 1
+else
+    printf "\n${GREEN}Proceeding...${NC}\n"
+fi
+
+printf "${GREEN}We have detected you are using the $shell_name shell with config $shell_config_path${NC}\n"
+
+# Make the shell config file if it doesn't exist yet
+if [ ! -f "$shell_config_path" ]; then
+    touch $shell_config_path
+fi
 
 grep -q -F '# DEVELOPMENT #' $shell_config_path
 
@@ -34,6 +58,11 @@ if [ $? -ne 0 ]; then
     printf 'alias phpunit="vendor/bin/phpunit"\n' >> $shell_config_path
     printf 'alias phpstan="vendor/bin/phpstan"\n' >> $shell_config_path
     printf 'alias composer="COMPOSER_MEMORY_LIMIT=-1 composer"\n' >> $shell_config_path
+    printf 'alias art="php artisan"\n' >> $shell_config_path
+    printf 'alias portal="cd $HOME/Code/portal"\n' >> $shell_config_path
+    printf 'alias grep="grep --color=always"\n' >> $shell_config_path
+
+    source $shell_config_path
 fi
 
 # DO WE NEED TO INSTALL NVM?
@@ -76,7 +105,7 @@ printf "\n${GREEN}brew update${NC}\n"
 brew update
 
 # DO WE NEED TO INSTALL PHP?
-is_php_detected=$(brew -v 2> /dev/null)
+is_php_detected=$(brew list php 2> /dev/null)
 
 if [[ $is_php_detected ]]; then
     printf "\n${GREEN}php is already installed${NC}\n"
@@ -101,7 +130,7 @@ else
 fi
 
 # DO WE NEED TO INSTALL COMPOSER?
-is_composer_detected==$(composer --version 2> /dev/null)
+is_composer_detected=$(composer --version 2> /dev/null)
 
 if [[ $is_composer_detected ]]; then
     printf "\n${GREEN}composer is already installed${NC}\n"
@@ -124,7 +153,7 @@ else
 fi
 
 # DO WE NEED TO INSTALL LARAVEL/VALET?
-is_valet_detected==$(valet --version 2> /dev/null)
+is_valet_detected=$(valet --version 2> /dev/null)
 
 if [[ $is_valet_detected ]]; then
     printf "\n${GREEN}valet is already installed${NC}\n"
@@ -133,3 +162,56 @@ else
     composer global require laravel/valet
     valet install
 fi
+
+# DO WE NEED TO INSTALL REDIS?
+is_redis_detected=$(brew list redis 2> /dev/null)
+
+if [[ $is_redis_detected ]]; then
+    printf "\n${GREEN}redis is already installed${NC}\n"
+else
+    printf "\n${GREEN}redis is not installed - proceeding to install${NC}\n"
+    brew install redis
+    brew services start redis
+fi
+
+# GET THE MYSQL PASSWORD
+printf "Enter your mysql root password (most likely it is blank or something simple like 'pass':\n"
+read -rs password </dev/tty
+
+# MAKE SURE THE APPROPRIATE DATABASES EXIST
+mysql --user="root" --password="$password" --execute="CREATE DATABASE IF NOT EXISTS portal; CREATE DATABASE IF NOT EXISTS test;"
+
+# SETUP PROJECT DIRECTORY
+if [ ! -d $HOME/Code ]; then
+  mkdir $HOME/Code
+fi
+
+cd "$HOME/Code" || exit 1
+
+# CLONE THE PORTAL REPO
+if [ ! -d portal ]; then
+  printf "\n${GREEN}cloning the portal repo${NC}\n"
+  git clone git@github.com:TAGResources/portal.git
+fi;
+
+valet paths | grep -q -F "$HOME/Code"
+
+# IS VALET SERVING THE PROJECT?
+if [ $? -ne 0 ]; then
+  printf "\n${GREEN}Telling Laravel Valet to serve projects in ~/Code${NC}\n"
+  valet park
+fi
+
+cd portal || exit 1
+
+if [ ! -f ".env" ]; then
+    printf "\n${GREEN}Creating standard .env file${NC}\n"
+    cp .env.example .env
+fi
+
+printf "\n${GREEN}Preparing assets and 3rd party libraries${NC}\n"
+composer install
+npm install
+npm run dev
+
+printf "\n\n${GREEN}Done with setup! Go to portal.test in your browser to test it out! If there are any issues, double check the values in your .env or ask another dev for help.${NC}\n"
