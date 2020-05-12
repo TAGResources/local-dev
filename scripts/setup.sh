@@ -20,11 +20,8 @@ fi
 prompt="Before continuing, did you setup an ssh key with github? https://help.github.com/en/github/authenticating-to-github/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent (Y to continue, N to cancel): "
 printf "${GREEN}${prompt}${NC}"
 
-if [[ $shell_name == "bash" ]]; then
-  read -n 1 -r
-else
-  read -k -r
-fi
+# this only works for bash
+read -n 1 -r # use read -k -r if running with zsh
 
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     printf "\n${RED}ERROR: Please do that first, then re-run this script.${NC}\n"
