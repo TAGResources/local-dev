@@ -58,6 +58,10 @@ if [ $? -ne 0 ]; then
     printf 'alias art="php artisan"\n' >> $shell_config_path
     printf 'alias portal="cd $HOME/Code/portal"\n' >> $shell_config_path
     printf 'alias grep="grep --color=always"\n' >> $shell_config_path
+    printf 'behat() {' >> $shell_config_path
+    printf 'echo "running: php artisan behat --env_path=.env.behat.local --append-snippets $@"' >> $shell_config_path
+    printf 'command php artisan behat --env_path=.env.behat.local --append-snippets "$@"' >> $shell_config_path
+    printf '}' >> $shell_config_path
 
     source $shell_config_path
 fi
@@ -197,9 +201,19 @@ valet paths | grep -q -F "$HOME/Code"
 if [ $? -ne 0 ]; then
   printf "\n${GREEN}Telling Laravel Valet to serve projects in ~/Code${NC}\n"
   valet park
+  valet secure portal # use https for the portal
 fi
 
 cd portal || exit 1
+
+valet links | grep -q -F "onboarding"
+
+# IS VALET SERVING THE ONBOARDING SITE?
+if [ $? -ne 0 ]; then
+  printf "\n${GREEN}Telling Laravel Valet to serve the onboarding site from ~/Code/portal${NC} (same project as the portal but different domain)\n"
+  valet link onboarding.tagresources
+  valet secure onboarding.tagresources # use https for the onboarding site
+fi
 
 if [ ! -f ".env" ]; then
     printf "\n${GREEN}Creating standard .env file${NC}\n"
