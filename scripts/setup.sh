@@ -220,6 +220,11 @@ if [ ! -f ".env" ]; then
     cp .env.example .env
 fi
 
+if [ ! -f ".env.behat.local" ]; then
+    printf "\n${GREEN}Creating standard .env.behat.local file${NC}\n"
+    cp .env.behat.local.example .env.behat.local
+fi
+
 printf "\n${GREEN}Preparing assets and 3rd party libraries${NC}\n"
 composer install
 npm install
